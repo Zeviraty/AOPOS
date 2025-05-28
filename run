@@ -1,0 +1,2 @@
+./compile
+qemu-system-i386 -kernel build/aopos.bin

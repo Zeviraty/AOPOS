@@ -1,0 +1,30 @@
+set -e
+
+rm -rf build
+mkdir -p build
+i686-elf-as src/boot/boot.s -o build/boot.o
+nasm -f elf src/system/gdt_flush.asm -o build/gdt_flush.o
+nasm -f elf src/system/isr_stubs.asm -o build/isr_stubs.o
+
+find src -name '*.c' | while read -r file; do
+  obj="build/${file#src/}"
+  obj="${obj%.c}.o"
+  mkdir -p "$(dirname "$obj")"
+  i686-elf-gcc -c "$file" -o "$obj" -std=gnu99 -ffreestanding -O2 -Wall -Wextra -Isrc
+done
+
+OBJ_FILES=$(find build -name '*.o' ! -name 'boot.o' | tr '\n' ' ')
+
+i686-elf-gcc -T src/boot/linker.ld -o build/aopos.bin -ffreestanding -O2 -nostdlib build/boot.o $OBJ_FILES -lgcc
+
+if grub-file --is-x86-multiboot build/aopos.bin; then
+  echo "multiboot confirmed"
+else
+  echo "the file is not multiboot"
+  exit 1
+fi
+
+mkdir -p isodir/boot/grub
+cp build/aopos.bin isodir/boot/aopos.bin
+cp src/grub.cfg isodir/boot/grub/grub.cfg
+grub-mkrescue -o build/aopos.iso isodir
