@@ -10,7 +10,7 @@ extern void keyboard_handler_stub(void);
 void idt_set_descriptor(uint8_t vector, void* isr, uint8_t flags) {
     uint32_t isr_addr = (uint32_t)isr;
 
-    struct idt_entry* desc = &idt[vector];
+    volatile struct idt_entry* desc = &idt[vector];
     desc->isr_low    = isr_addr & 0xFFFF;
     desc->kernel_cs  = 0x08;  // Your kernel code segment selector from GDT
     desc->reserved   = 0;

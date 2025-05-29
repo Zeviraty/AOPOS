@@ -46,5 +46,7 @@ void exception_handler(uint32_t int_no, uint32_t err_code) {
     terminal_writestring(" (err code: ");
     terminal_writestring(err_str);
     terminal_writestring(")\n");
+
+    while (1) { __asm__ volatile ("hlt"); }
 }
 
