@@ -19,6 +19,8 @@ void idt_set_descriptor(uint8_t vector, void* isr, uint8_t flags) {
 }
 
 void idt_init(void) {
+    outb(0x21, 0xFF);
+    outb(0xA1, 0xFF);
     idtr.base = (uint32_t)&idt;
     idtr.limit = sizeof(struct idt_entry) * IDT_MAX_DESCRIPTORS - 1;
 
