@@ -6,6 +6,7 @@ void keyboard_handler() {
     terminal_writestring("Scancode: ");
     terminal_writehex(scancode);
     terminal_writestring("\n");
+    outb(0x20, 0x20);
 }
 
 __attribute__((used))

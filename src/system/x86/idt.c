@@ -31,4 +31,7 @@ void idt_init(void) {
     idt_set_descriptor(33, keyboard_handler_stub, 0x8E);
 
     __asm__ volatile ("lidt %0" : : "m"(idtr));
+    uint8_t mask = inb(0x21);
+    mask &= ~(1 << 1);
+    outb(0x21, mask);
 }
