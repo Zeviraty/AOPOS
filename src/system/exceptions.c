@@ -1,6 +1,6 @@
 #include <stdint.h>
 #include <stddef.h>
-#include "system/terminal.h"
+#include "kernel/terminal.h"
 
 const char* exception_messages[] = {
     "Division By Zero", "Debug", "Non Maskable Interrupt", "Breakpoint", "Into Detected Overflow",

@@ -1,17 +1,26 @@
-#include "system/terminal.h"
+#include "terminal.h"
 #include "drivers/vga.h"
-#include "system/gdt.h"
-#include "system/idt.h"
-#include "system/io.h"
-#include "system/pic.h"
+#include "system/x86/gdt.h"
+#include "system/x86/idt.h"
+#include "system/x86/io.h"
+#include "system/x86/pic.h"
+#include "shell.h"
+#include "drivers/ata.h"
+#include "lib/string.h"
+#include "fs/fs.h"
 
 void kernel_main(void) {
+    asm volatile("cli");
+    
     gdt_install();
     pic_remap();
     idt_init();
-    asm volatile("sti");
-    
+
     terminal_initialize();
+
+    asm volatile("sti");
+
+    fs_init();
 
     terminal_writestring("===================================\n");
     terminal_writestring("===            ");
@@ -22,5 +31,5 @@ void kernel_main(void) {
     terminal_writestring("===  Another OSdev Project OS   ===\n");
     terminal_writestring("===================================\n");
 
-    while(1) { __asm__ volatile ("hlt"); }
+    shell_init();
 }

@@ -1,6 +1,7 @@
-#include "system/terminal.h"
+#include "terminal.h"
 #include "drivers/vga.h"
 #include "lib/string.h"
+#include "system/x86/io.h"
 
 #define VGA_WIDTH   80
 #define VGA_HEIGHT  25
@@ -26,6 +27,7 @@ void terminal_scroll(void) {
 void terminal_initialize(void) {
     terminal_row = 0;
     terminal_column = 0;
+    update_cursor(0,0);
     terminal_color = vga_entry_color(VGA_COLOR_WHITE, VGA_COLOR_BLACK);
 
     for (size_t y = 0; y < VGA_HEIGHT; y++) {
@@ -60,10 +62,26 @@ void terminal_putentryat(char c, uint8_t color, size_t x, size_t y) {
     terminal_buffer[index] = vga_entry(c, color);
 }
 
+void update_cursor(int x, int y)
+{
+    uint16_t pos = y * VGA_WIDTH + x;
+
+    outb(0x3D4, 0x0F);
+    outb(0x3D5, (uint8_t) (pos & 0xFF));
+    outb(0x3D4, 0x0E);
+    outb(0x3D5, (uint8_t) ((pos >> 8) & 0xFF));
+}
+
 void terminal_putchar(char c) {
     if (c == '\n') {
         terminal_column = 0;
         terminal_row++;
+    } else if (c == '\b') {
+	if (terminal_column != 0) {
+	    terminal_column--;
+	    terminal_putchar(' ');
+	    terminal_column--;
+	}
     } else {
         terminal_putentryat(c, terminal_color, terminal_column, terminal_row);
         terminal_column++;
@@ -76,6 +94,8 @@ void terminal_putchar(char c) {
     if (terminal_row == VGA_HEIGHT) {
         terminal_scroll();
     }
+
+    update_cursor(terminal_column,terminal_row);
 }
 
 void terminal_write(const char* data, size_t size) {

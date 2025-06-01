@@ -1,2 +1,2 @@
 ./compile
-qemu-system-i386 -kernel build/aopos.bin
+qemu-system-i386 -kernel build/aopos.bin -drive file=disk.img,format=raw,if=ide
