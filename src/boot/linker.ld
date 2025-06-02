@@ -47,6 +47,14 @@ SECTIONS
 		*(.bss)
 	}
 
+	/* Reserve 16 KB for the kernel stack */
+        .stack ALIGN(4K) :
+        {
+            . = . + 16K;
+            stack_top = .;
+        }
+
+
 	/* The compiler may produce other sections, by default it will put them in
 	   a segment with the same name. Simply add stuff here as needed. */
 }

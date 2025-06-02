@@ -2,21 +2,12 @@
 #define FS_H
 
 #include <stdint.h>
-#include <stdbool.h>
-#include <stddef.h>
 
 #define FS_NAME_MAX 32
-#define FS_MAX_FILES 64
-
-int fs_create_file(const char* name, uint32_t start_address, uint32_t end_address);
-
-int fs_write_file(const char* name, const void* data, uint32_t size);
-
-int fs_read_file(const char* name, void* buffer, uint32_t size);
-
-bool fs_load_from_disk(void);
-
-void fs_save_to_disk(void);
+#define FS_MAX_ENTRIES 256
+#define FS_SIGNATURE "AOPFS"
+#define FS_ENTRY_SIZE sizeof(fs_entry_t)
+#define FS_SECTOR 10
 
 typedef struct __attribute__((packed)) {
     char name[FS_NAME_MAX];
@@ -25,11 +16,12 @@ typedef struct __attribute__((packed)) {
     uint8_t used;
 } fs_entry_t;
 
-void fs_init(void);
+static fs_entry_t fs_root[FS_MAX_ENTRIES];
 
-fs_entry_t* fs_find(const char* name);
+void fs_init();
+void fs_save();
+void fs_list_directory(fs_entry_t* dir);
+fs_entry_t* fs_find_entry(fs_entry_t* dir, const char* name);
+void fs_prompt_view_file(fs_entry_t* dir);
 
-fs_entry_t** fs_listdir(const char* folder, size_t* count);
-
-#endif 
-
+#endif

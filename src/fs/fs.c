@@ -1,163 +1,86 @@
 #include "fs.h"
 #include "lib/string.h"
-#include "drivers/ata.h"
 #include "kernel/terminal.h"
-#include <stdbool.h>
+#include "drivers/ata.h"
+#include "system/x86/io.h"
 
-static fs_entry_t fs_table[FS_MAX_FILES];
+__attribute__((aligned(512)))
+static fs_entry_t fs_root[FS_MAX_ENTRIES];
 
-#define FS_START_SECTOR 2
-#define FS_SIGNATURE "AOPFS"
-#define FS_SIGNATURE_LEN 5
-#define FS_START_SECTOR 2
+extern int input_buffer_get();
 
-void fs_init(void) {
-    terminal_writestring("Loading filesystem...\n");
-
-    if (!fs_load_from_disk()) {
-	//terminal_writestring("No valid FS found. Initializing new FS.\n");
-	//memset(fs_table, 0, sizeof(fs_table));
-	//fs_save_to_disk();
+void fs_init() {
+    char signature[6] = {0};
+    ata_read_sectors(FS_SECTOR, 1, signature);
+    terminal_writestring("Checking signature...\n");
+    if (strncmp(signature, FS_SIGNATURE, 5) == 0) {
+    	terminal_writestring("Reading fs sectors...\n");
+        ata_read_sectors(FS_SECTOR + 1, (sizeof(fs_root) + 511) / 512, fs_root);
+    	terminal_writestring("Done reading fs sectors...\n");
     } else {
-	terminal_writestring("Filesystem loaded successfully.\n");
+        memset(fs_root, 0, sizeof(fs_root));
+        fs_save();
     }
 }
 
-fs_entry_t* fs_find(const char* name) {
-    for (int i = 0; i < FS_MAX_FILES; i++) {
-        if (fs_table[i].used && strncmp(fs_table[i].name, name, FS_NAME_MAX) == 0) {
-            return &fs_table[i];
+void fs_save() {
+    uint8_t sig_block[512] = {0};
+    memcpy(sig_block, FS_SIGNATURE, 5);
+    ata_write_sectors(FS_SECTOR, 1, sig_block);
+    ata_write_sectors(FS_SECTOR + 1, (sizeof(fs_root) + 511) / 512, fs_root);
+}
+
+void fs_list_directory(fs_entry_t* dir) {
+    fs_entry_t* entries = (dir == 0) ? fs_root : (fs_entry_t*)(uintptr_t)dir->start_address;
+    for (int i = 0; i < FS_MAX_ENTRIES; i++) {
+        if (entries[i].used) {
+            terminal_writestring("- ");
+            terminal_writestring(entries[i].name);
+            terminal_putchar('\n');
         }
     }
-    return NULL;
 }
 
-int fs_create_file(const char* name, uint32_t start_address, uint32_t end_address) {
-    if (fs_find(name) != NULL) {
-        return -1;
-    }
-
-    for (int i = 0; i < FS_MAX_FILES; i++) {
-        if (!fs_table[i].used) {
-            strncpy(fs_table[i].name, name, FS_NAME_MAX);
-            fs_table[i].name[FS_NAME_MAX - 1] = '\0';
-            fs_table[i].start_address = start_address;
-            fs_table[i].end_address = end_address;
-            fs_table[i].used = 1;
-            return 0;
+fs_entry_t* fs_find_entry(fs_entry_t* dir, const char* name) {
+    fs_entry_t* entries = (dir == 0) ? fs_root : (fs_entry_t*)(uintptr_t)dir->start_address;
+    for (int i = 0; i < FS_MAX_ENTRIES; i++) {
+        if (entries[i].used && strncmp(entries[i].name, name, FS_NAME_MAX) == 0) {
+            return &entries[i];
         }
     }
-    return -1;
-}
-
-int fs_write_file(const char* name, const void* data, uint32_t size) {
-    fs_entry_t* entry = fs_find(name);
-    if (!entry) return -1;
-
-    uint32_t file_size = entry->end_address - entry->start_address;
-    if (size > file_size) return -1;
     return 0;
 }
 
-int fs_read_file(const char* name, void* buffer, uint32_t size) {
-    fs_entry_t* entry = fs_find(name);
-    if (!entry) return -1;
+void fs_prompt_view_file(fs_entry_t* dir) {
+    char input[FS_NAME_MAX];
+    terminal_writestring("Enter file name: ");
 
-    uint32_t file_size = entry->end_address - entry->start_address;
-    if (size > file_size) return -1;
-    return 0;
-}
+    size_t idx = 0;
+    while (1) {
+        int c = input_buffer_get();
+        if (c == -1) continue;
 
-fs_entry_t** fs_listdir(const char* folder, size_t* count) {
-    static fs_entry_t* results[FS_MAX_FILES];
-    *count = 0;
-
-    size_t folder_len = strlen(folder);
-    for (int i = 0; i < FS_MAX_FILES; i++) {
-        if (!fs_table[i].used)
-            continue;
-
-        const char* name = fs_table[i].name;
-
-        if (strncmp(name, folder, folder_len) == 0 && name[folder_len] == '/') {
-            const char* remainder = name + folder_len + 1;
-            if (strchr(remainder, '/') == NULL) {
-                results[*count] = &fs_table[i];
-                (*count)++;
-            }
+        if ((char)c == '\n' || idx >= FS_NAME_MAX - 1) {
+            input[idx] = '\0';
+            break;
+        } else {
+            input[idx++] = (char)c;
+            terminal_putchar((char)c);
         }
     }
+    terminal_putchar('\n');
 
-    return results;
-}
-
-bool fs_load_from_disk() {
-    uint8_t buffer[512];
-
-    terminal_writestring("Reading FS start sector...\n");
-    ata_read_sectors(FS_START_SECTOR, 1, buffer);
-
-    terminal_writestring("Checking FS signature...\n");
-    if (memcmp(buffer, FS_SIGNATURE, FS_SIGNATURE_LEN) != 0) {
-        terminal_writestring("Invalid FS signature\n");
-	terminal_writestring("No valid FS found. Initializing new FS.\n");
-	memset(fs_table, 0, sizeof(fs_table));
-	fs_save_to_disk();
+    fs_entry_t* file = fs_find_entry(dir, input);
+    if (!file || !file->used) {
+        terminal_writestring("File not found.\n");
+        return;
     }
 
-    uint32_t entries_per_first_sector = (512 - FS_SIGNATURE_LEN) / sizeof(fs_entry_t);
-    char msg[64];
-
-    terminal_writestring("Signature valid, copying entries from first sector...\n");
-    memcpy(fs_table, buffer + FS_SIGNATURE_LEN, entries_per_first_sector * sizeof(fs_entry_t));
-
-    uint32_t remaining = FS_MAX_FILES - entries_per_first_sector;
-    if (remaining > 0) {
-        uint32_t bytes_remaining = remaining * sizeof(fs_entry_t);
-        uint32_t sectors_remaining = (bytes_remaining + 511) / 512;
-
-        terminal_writestring("Reading remaining entries.\n");
-
-        ata_read_sectors(FS_START_SECTOR + 1, sectors_remaining,
-                         (uint8_t*)fs_table + entries_per_first_sector * sizeof(fs_entry_t));
-        terminal_writestring("Finished reading remaining entries\n");
+    uint32_t size = file->end_address - file->start_address;
+    char* data = (char*)(uintptr_t)file->start_address;
+    for (uint32_t i = 0; i < size; i++) {
+        terminal_putchar(data[i]);
     }
-
-    return true;
-}
-
-void fs_save_to_disk() {
-    terminal_writestring("Start\n");
-
-    uint8_t buffer[512] = {0};
-
-    terminal_writestring("Copying signature\n");
-    memcpy(buffer, FS_SIGNATURE, FS_SIGNATURE_LEN);
-
-    uint32_t entries_per_first_sector = (512 - FS_SIGNATURE_LEN) / sizeof(fs_entry_t);
-    uint32_t bytes_to_copy = entries_per_first_sector * sizeof(fs_entry_t);
-
-    terminal_writestring("Copying fs_table entries to buffer\n");
-    memcpy(buffer + FS_SIGNATURE_LEN, fs_table, bytes_to_copy);
-
-    terminal_writestring("Writing first sector\n");
-    ata_write_sectors(FS_START_SECTOR, 1, buffer);
-    terminal_writestring("First sector written\n");
-
-    uint32_t remaining = FS_MAX_FILES - entries_per_first_sector;
-    if (remaining > 0) {
-        uint32_t bytes_remaining = remaining * sizeof(fs_entry_t);
-        uint32_t sectors_remaining = (bytes_remaining + 511) / 512;
-
-        char msg[64];
-        terminal_writestring("Writing remaining entries.\n");
-
-        ata_write_sectors(FS_START_SECTOR + 1,
-                          sectors_remaining,
-                          (uint8_t*)fs_table + bytes_to_copy);
-        terminal_writestring("Remaining sectors written\n");
-    }
-
-    terminal_writestring("Done\n");
+    terminal_putchar('\n');
 }
 

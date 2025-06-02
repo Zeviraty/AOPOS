@@ -11,6 +11,8 @@
 
 void kernel_main(void) {
     asm volatile("cli");
+    extern char stack_top[];
+    asm volatile ("mov %0, %%esp" :: "r"(stack_top));
     
     gdt_install();
     pic_remap();
