@@ -83,4 +83,3 @@ void fs_prompt_view_file(fs_entry_t* dir) {
     }
     terminal_putchar('\n');
 }
-
